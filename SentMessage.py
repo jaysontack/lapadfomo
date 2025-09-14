@@ -1,7 +1,6 @@
 import os
 import asyncio
 import random
-import re
 import json
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -9,7 +8,6 @@ from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 from telethon.errors import AuthKeyDuplicatedError
 
-GIFS_DIR = "gifs"
 groups = ["Lets_Announcepad"]
 target_channel = "https://t.me/lapad_announcement"
 
