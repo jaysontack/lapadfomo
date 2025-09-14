@@ -61,12 +61,16 @@ conversations = [block.strip().splitlines() for block in raw_blocks if block.str
 
 
 async def client_worker(idx, acc, client, clients):
-    me = await client.get_me()
-    print(f"👤 {me.first_name} (@{me.username}) aktif oldu ve kanal dinlemede...")
+    try:
+        me = await client.get_me()
+        print(f"👤 {idx}. hesap aktif: {me.first_name} (@{me.username})")
+    except Exception as e:
+        print(f"❌ {idx}. hesap bilgisi alınamadı: {e}")
+        return
 
     @client.on(events.NewMessage(chats=target_channel))
     async def handler(event):
-        print(f"📩 Yeni mesaj yakalandı: {event.raw_text[:50]}...")
+        print(f"📩 {me.username} yeni mesaj gördü: {event.raw_text[:50]}...")
         try:
             chosen = random.sample(emojis, 2)
             for emoji in chosen:
@@ -78,20 +82,24 @@ async def client_worker(idx, acc, client, clients):
                 print(f"💬 {me.username} reaction bıraktı: {emoji}")
                 await asyncio.sleep(2)
         except Exception as e:
-            print(f"⚠️ Reaction hatası: {e}")
+            print(f"⚠️ Reaction hatası ({me.username}): {e}")
 
     return client
 
 
 async def general_chat_loop(clients, accounts):
     print("🔄 Genel chat loop başlatıldı (round-robin)")
-
     while True:
         for idx, client in enumerate(clients):
             if not client:
                 continue
             acc = accounts[idx]
-            me = await client.get_me()
+            try:
+                me = await client.get_me()
+            except Exception as e:
+                print(f"⚠️ {idx+1}. hesap get_me hatası: {e}")
+                continue
+
             msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
             for g in groups:
                 try:
@@ -108,7 +116,6 @@ async def general_chat_loop(clients, accounts):
                 except Exception as e:
                     print(f"⚠️ Genel sohbet hatası ({me.username}): {e}")
 
-        # bütün kullanıcılar sırayla attı → bekleme süresi
         print("⏳ Tüm kullanıcılar mesaj+sticker attı, bekleniyor...")
         await asyncio.sleep(random.randint(200, 300))
 
@@ -117,7 +124,7 @@ async def conversation_loop(clients, accounts):
     print("🔄 Conversation loop başlatıldı")
     while True:
         block = random.choice(conversations)
-        print(f"🗨️ Yeni conversation başladı (otomatik)...")
+        print(f"🗨️ Yeni conversation başladı...")
         last_msg, prev_sender = None, None
         for line in block:
             line = line.strip()
@@ -136,10 +143,12 @@ async def conversation_loop(clients, accounts):
                 if sender == prev_sender:
                     sender_idx = (sender_idx + 1) % len(clients)
                 sender_client = clients[sender_idx]
-                sender_acc = accounts[sender_idx]
+                if not sender_client:
+                    print(f"⚠️ {sender} için client yok, atlanıyor...")
+                    continue
                 me = await sender_client.get_me()
-            except (ValueError, IndexError):
-                print(f"⚠️ {sender} için client bulunamadı")
+            except (ValueError, IndexError) as e:
+                print(f"⚠️ {sender} için index hatası: {e}")
                 continue
             for g in groups:
                 try:
@@ -151,7 +160,7 @@ async def conversation_loop(clients, accounts):
                         print(f"💬 {sender} ({me.username}) said in {g}: {content}")
                     last_msg, prev_sender = sent, sender
                 except Exception as e:
-                    print(f"⚠️ Conversation hatası: {e}")
+                    print(f"⚠️ Conversation hatası ({me.username}): {e}")
             await asyncio.sleep(random.randint(20, 40))
         await asyncio.sleep(random.randint(100, 200))
 
@@ -159,29 +168,35 @@ async def conversation_loop(clients, accounts):
 async def main():
     clients = []
     for idx, acc in enumerate(accounts, start=1):
-        print(f"🚀 {idx}. hesap başlatılıyor...")
-        client = TelegramClient(StringSession(acc["STRING_SESSION"]), acc["API_ID"], acc["API_HASH"])
-        await client.start()
-        clients.append(client)
+        print(f"🚀 {idx}. hesap başlatılıyor... API_ID={acc['API_ID']}")
+        try:
+            client = TelegramClient(StringSession(acc["STRING_SESSION"]), acc["API_ID"], acc["API_HASH"])
+            await client.start()
+            clients.append(client)
+            print(f"✅ {idx}. hesap başarıyla giriş yaptı")
+        except Exception as e:
+            print(f"❌ {idx}. hesap başlatılamadı: {e}")
+            clients.append(None)
 
-    print(f"✅ {len(clients)} client aktif edildi")
+    aktif = [c for c in clients if c]
+    print(f"✅ {len(aktif)} client aktif edildi, {len(clients)-len(aktif)} hata verdi")
 
     for idx, client in enumerate(clients, start=1):
         if client:
+            print(f"▶️ client_worker başlatılıyor: {idx}")
             asyncio.create_task(client_worker(idx, accounts[idx-1], client, clients))
             await asyncio.sleep(2)
 
-    if not clients:
+    if not aktif:
         print("❌ Hiç client başlatılamadı, çıkılıyor...")
         return
 
     asyncio.create_task(general_chat_loop(clients, accounts))
     asyncio.create_task(conversation_loop(clients, accounts))
 
-    await asyncio.gather(*(c.run_until_disconnected() for c in clients if c))
+    await asyncio.gather(*(c.run_until_disconnected() for c in aktif))
 
 
 if __name__ == "__main__":
     print("🔥 Bot başlatılıyor...")
     asyncio.run(main())
-
