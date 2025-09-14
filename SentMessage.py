@@ -10,7 +10,6 @@ from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
 GIFS_DIR = "gifs"
-
 groups = ["Lets_Announcepad"]
 target_channel = "https://t.me/lapad_announcement"
 
@@ -185,3 +184,4 @@ async def main():
 if __name__ == "__main__":
     print("🔥 Bot başlatılıyor...")
     asyncio.run(main())
+
