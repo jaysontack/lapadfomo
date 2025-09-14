@@ -15,22 +15,29 @@ groups = ["Lets_Announcepad"]
 target_channel = "https://t.me/lapad_announcement"
 
 # ENV’den JSON olarak accounts okuma (Render için tek değişken kullanmak kolay olur)
-accounts = json.loads(os.getenv("ACCOUNTS_JSON", "[]"))
+raw_accounts = os.getenv("ACCOUNTS_JSON", "[]")
+print("📥 ENV'den gelen ACCOUNTS_JSON:", raw_accounts[:120], "...")  # ilk 120 karakterini logla
+accounts = json.loads(raw_accounts)
+print(f"✅ {len(accounts)} hesap yüklendi")
 
 emojis = ["🔥", "🚀", "❤️", "😂", "😎", "👏", "🎉", "💯"]
 
 with open("message.txt", "r", encoding="utf-8") as f:
     messages = [line.strip() for line in f if line.strip()]
+print(f"✅ {len(messages)} hype mesaj yüklendi")
 
 with open("general.txt", "r", encoding="utf-8") as f:
     general_msgs = [line.strip() for line in f if line.strip()]
+print(f"✅ {len(general_msgs)} genel mesaj yüklendi")
 
 with open("stickers.txt", "r", encoding="utf-8") as f:
     stickers = [line.strip() for line in f if line.strip()]
+print(f"✅ {len(stickers)} sticker yüklendi")
 
 with open("conversations.txt", "r", encoding="utf-8") as f:
     raw_blocks = f.read().split("---")
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
+print(f"✅ {len(conversations)} conversation bloğu yüklendi")
 
 
 async def client_worker(idx, acc, client, clients):
@@ -39,6 +46,7 @@ async def client_worker(idx, acc, client, clients):
 
     @client.on(events.NewMessage(chats=target_channel))
     async def handler(event):
+        print(f"📩 Yeni mesaj yakalandı: {event.raw_text[:50]}...")
         try:
             chosen = random.sample(emojis, 2)
             for emoji in chosen:
@@ -52,106 +60,24 @@ async def client_worker(idx, acc, client, clients):
         except Exception as e:
             print(f"⚠️ Reaction hatası: {e}")
 
-        text = event.raw_text
-        match = re.search(r"#lapad\s+(#[A-Za-z0-9_]+)", text, re.IGNORECASE)
-        if not match:
-            return
-        symbol = match.group(1).replace("#", "").upper()
-        print(f"🔎 Symbol bulundu: {symbol}")
-
-        hype = random.choice(messages).replace("{symbol}", symbol)
-
-        gifs = os.listdir(GIFS_DIR) if os.path.exists(GIFS_DIR) else []
-        gif_path = os.path.join(GIFS_DIR, random.choice(gifs)) if gifs else None
-
-        for g in groups:
-            try:
-                await client(JoinChannelRequest(g))
-                sent = await client.send_message(g, hype)
-                print(f"✅ {me.username} gruba hype mesajı attı: {hype}")
-                await asyncio.sleep(2)
-
-                if stickers:
-                    sticker = random.choice(stickers)
-                    await client.send_file(g, sticker, reply_to=sent.id)
-                    print(f"🎨 {me.username} gruba sticker attı")
-
-                if gif_path and random.random() < 0.4:
-                    await client.send_file(g, gif_path, reply_to=sent.id)
-                    print(f"🎞️ {me.username} gruba gif attı: {os.path.basename(gif_path)}")
-
-                if "Twitter" in text or "Telegram" in text:
-                    block = random.choice(conversations)
-                    print(f"🗨️ Yeni conversation başladı (Twitter/Telegram tetikledi)...")
-                    last_msg = sent
-                    prev_sender = None
-                    for line in block:
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        if "->" in line:
-                            speaker, content = line.split(":", 1)
-                            sender, _ = speaker.split("->")
-                            sender = sender.strip()
-                        else:
-                            sender, content = line.split(":", 1)
-                            sender = sender.strip()
-                        content = content.strip()
-                        try:
-                            sender_idx = "ABCD".index(sender)
-                            # flood önleme: aynı kullanıcı üst üste gelirse farklı client seç
-                            if sender == prev_sender:
-                                sender_idx = (sender_idx + 1) % len(clients)
-                            sender_client = clients[sender_idx]
-                        except (ValueError, IndexError):
-                            print(f"⚠️ {sender} için client bulunamadı")
-                            continue
-                        try:
-                            if last_msg:
-                                sent = await sender_client.send_message(g, content, reply_to=last_msg.id)
-                                print(f"💬 {sender} replied in {g}: {content}")
-                            else:
-                                sent = await sender_client.send_message(g, content)
-                                print(f"💬 {sender} said in {g}: {content}")
-                            last_msg = sent
-                            prev_sender = sender
-                        except Exception as e:
-                            print(f"⚠️ Conversation hatası: {e}")
-                        await asyncio.sleep(random.randint(20, 40))  # süre artırıldı
-            except Exception as e:
-                print(f"⚠️ Grup mesaj hatası: {e}")
-
     async def general_chat_loop():
+        print(f"🔄 {me.username} için general_chat_loop başladı")
         while True:
             msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
-            gifs = os.listdir(GIFS_DIR) if os.path.exists(GIFS_DIR) else []
-            gif_path = os.path.join(GIFS_DIR, random.choice(gifs)) if gifs else None
-
             for g in groups:
                 try:
                     sent = await client.send_message(g, msg)
                     print(f"💬 {me.username} genel mesaj attı: {msg}")
-                    await asyncio.sleep(2)
-
-                    if stickers:
-                        sticker = random.choice(stickers)
-                        await client.send_file(g, sticker, reply_to=sent.id)
-                        print(f"🎨 {me.username} genel sticker attı")
-
-                    if gif_path and random.random() < 0.4:
-                        await client.send_file(g, gif_path, reply_to=sent.id)
-                        print(f"🎞️ {me.username} genel gif attı: {os.path.basename(gif_path)}")
                 except Exception as e:
                     print(f"⚠️ Genel sohbet hatası: {e}")
-
             await asyncio.sleep(random.randint(200, 300))
 
     async def conversation_loop():
+        print(f"🔄 {me.username} için conversation_loop başladı")
         while True:
             block = random.choice(conversations)
             print(f"🗨️ Yeni conversation başladı (otomatik)...")
-            last_msg = None
-            prev_sender = None
+            last_msg, prev_sender = None, None
             for line in block:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -180,8 +106,7 @@ async def client_worker(idx, acc, client, clients):
                         else:
                             sent = await sender_client.send_message(g, content)
                             print(f"💬 {sender} said in {g}: {content}")
-                        last_msg = sent
-                        prev_sender = sender
+                        last_msg, prev_sender = sent, sender
                     except Exception as e:
                         print(f"⚠️ Conversation hatası: {e}")
                 await asyncio.sleep(random.randint(20, 40))
@@ -195,17 +120,26 @@ async def client_worker(idx, acc, client, clients):
 async def main():
     clients = []
     for idx, acc in enumerate(accounts, start=1):
+        print(f"🚀 {idx}. hesap başlatılıyor...")
         client = TelegramClient(StringSession(acc["STRING_SESSION"]), acc["API_ID"], acc["API_HASH"])
         await client.start()
         clients.append(client)
 
+    print(f"✅ {len(clients)} client aktif edildi")
+
     for idx, client in enumerate(clients, start=1):
         if client:
+            print(f"▶️ client_worker başlatılıyor: {idx}")
             asyncio.create_task(client_worker(idx, accounts[idx-1], client, clients))
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
+
+    if not clients:
+        print("❌ Hiç client başlatılamadı, çıkılıyor...")
+        return
 
     await asyncio.gather(*(c.run_until_disconnected() for c in clients if c))
 
 
 if __name__ == "__main__":
+    print("🔥 Bot başlatılıyor...")
     asyncio.run(main())
