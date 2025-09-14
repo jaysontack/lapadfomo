@@ -75,7 +75,7 @@ async def client_worker(idx, acc, client, clients):
                 await client(SendReactionRequest(
                     peer=event.chat_id,
                     msg_id=event.id,
-                    reaction=[ReactionEmoji(emoticon=emoji)]
+                    reaction=[ReactionEmoji(emoticon=e) for e in chosen]
                 ))
                 print(f"💬 {me.username} reaction bıraktı: {emoji}")
                 await asyncio.sleep(2)
@@ -212,3 +212,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("🛑 Manuel durdurma yapıldı.")
+
