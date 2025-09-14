@@ -69,15 +69,17 @@ async def client_worker(idx, acc, client, clients):
     @client.on(events.NewMessage(chats=target_channel))
     async def handler(event):
         print(f"📩 {me.username} yeni mesaj gördü: {event.raw_text[:50]}...")
+
         try:
-            chosen = random.sample(emojis, 2)
-            for emoji in chosen:
+            # 3 tur reaction bırak (her turda farklı emoji seç)
+            for round_num in range(1, 4):
+                emoji = random.choice(emojis)
                 await client(SendReactionRequest(
                     peer=event.chat_id,
                     msg_id=event.id,
-                    reaction=[ReactionEmoji(emoticon=e) for e in chosen]
+                    reaction=[ReactionEmoji(emoticon=emoji)]
                 ))
-                print(f"💬 {me.username} reaction bıraktı: {emoji}")
+                print(f"💬 {me.username} Round {round_num} reaction bıraktı: {emoji}")
                 await asyncio.sleep(2)
         except Exception as e:
             print(f"⚠️ Reaction hatası ({me.username}): {e}")
@@ -212,4 +214,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("🛑 Manuel durdurma yapıldı.")
-
