@@ -81,61 +81,80 @@ async def client_worker(idx, acc, client, clients):
         except Exception as e:
             print(f"⚠️ Reaction hatası: {e}")
 
-    async def general_chat_loop():
-        print(f"🔄 {me.username} için general_chat_loop başladı")
-        while True:
+    return client
+
+
+async def general_chat_loop(clients, accounts):
+    print("🔄 Genel chat loop başlatıldı (round-robin)")
+
+    while True:
+        for idx, client in enumerate(clients):
+            if not client:
+                continue
+            acc = accounts[idx]
+            me = await client.get_me()
             msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
             for g in groups:
                 try:
                     sent = await client.send_message(g, msg)
-                    print(f"💬 {me.username} genel mesaj attı: {msg}")
+                    print(f"💬 {me.username} ({idx+1}) genel mesaj attı: {msg}")
+                    await asyncio.sleep(2)
+
+                    if stickers:
+                        sticker = random.choice(stickers)
+                        await client.send_file(g, sticker, reply_to=sent.id)
+                        print(f"🎨 {me.username} ({idx+1}) sticker attı")
+                        await asyncio.sleep(2)
+
                 except Exception as e:
-                    print(f"⚠️ Genel sohbet hatası: {e}")
-            await asyncio.sleep(random.randint(200, 300))
+                    print(f"⚠️ Genel sohbet hatası ({me.username}): {e}")
 
-    async def conversation_loop():
-        print(f"🔄 {me.username} için conversation_loop başladı")
-        while True:
-            block = random.choice(conversations)
-            print(f"🗨️ Yeni conversation başladı (otomatik)...")
-            last_msg, prev_sender = None, None
-            for line in block:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "->" in line:
-                    speaker, content = line.split(":", 1)
-                    sender, _ = speaker.split("->")
-                    sender = sender.strip()
-                else:
-                    sender, content = line.split(":", 1)
-                    sender = sender.strip()
-                content = content.strip()
+        # bütün kullanıcılar sırayla attı → bekleme süresi
+        print("⏳ Tüm kullanıcılar mesaj+sticker attı, bekleniyor...")
+        await asyncio.sleep(random.randint(200, 300))
+
+
+async def conversation_loop(clients, accounts):
+    print("🔄 Conversation loop başlatıldı")
+    while True:
+        block = random.choice(conversations)
+        print(f"🗨️ Yeni conversation başladı (otomatik)...")
+        last_msg, prev_sender = None, None
+        for line in block:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "->" in line:
+                speaker, content = line.split(":", 1)
+                sender, _ = speaker.split("->")
+                sender = sender.strip()
+            else:
+                sender, content = line.split(":", 1)
+                sender = sender.strip()
+            content = content.strip()
+            try:
+                sender_idx = "ABCD".index(sender)
+                if sender == prev_sender:
+                    sender_idx = (sender_idx + 1) % len(clients)
+                sender_client = clients[sender_idx]
+                sender_acc = accounts[sender_idx]
+                me = await sender_client.get_me()
+            except (ValueError, IndexError):
+                print(f"⚠️ {sender} için client bulunamadı")
+                continue
+            for g in groups:
                 try:
-                    sender_idx = "ABCD".index(sender)
-                    if sender == prev_sender:
-                        sender_idx = (sender_idx + 1) % len(clients)
-                    sender_client = clients[sender_idx]
-                except (ValueError, IndexError):
-                    print(f"⚠️ {sender} için client bulunamadı")
-                    continue
-                for g in groups:
-                    try:
-                        if last_msg:
-                            sent = await sender_client.send_message(g, content, reply_to=last_msg.id)
-                            print(f"💬 {sender} replied in {g}: {content}")
-                        else:
-                            sent = await sender_client.send_message(g, content)
-                            print(f"💬 {sender} said in {g}: {content}")
-                        last_msg, prev_sender = sent, sender
-                    except Exception as e:
-                        print(f"⚠️ Conversation hatası: {e}")
-                await asyncio.sleep(random.randint(20, 40))
-            await asyncio.sleep(random.randint(100, 200))
-
-    client.loop.create_task(general_chat_loop())
-    client.loop.create_task(conversation_loop())
-    return client
+                    if last_msg:
+                        sent = await sender_client.send_message(g, content, reply_to=last_msg.id)
+                        print(f"💬 {sender} ({me.username}) replied in {g}: {content}")
+                    else:
+                        sent = await sender_client.send_message(g, content)
+                        print(f"💬 {sender} ({me.username}) said in {g}: {content}")
+                    last_msg, prev_sender = sent, sender
+                except Exception as e:
+                    print(f"⚠️ Conversation hatası: {e}")
+            await asyncio.sleep(random.randint(20, 40))
+        await asyncio.sleep(random.randint(100, 200))
 
 
 async def main():
@@ -150,13 +169,15 @@ async def main():
 
     for idx, client in enumerate(clients, start=1):
         if client:
-            print(f"▶️ client_worker başlatılıyor: {idx}")
             asyncio.create_task(client_worker(idx, accounts[idx-1], client, clients))
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
 
     if not clients:
         print("❌ Hiç client başlatılamadı, çıkılıyor...")
         return
+
+    asyncio.create_task(general_chat_loop(clients, accounts))
+    asyncio.create_task(conversation_loop(clients, accounts))
 
     await asyncio.gather(*(c.run_until_disconnected() for c in clients if c))
 
