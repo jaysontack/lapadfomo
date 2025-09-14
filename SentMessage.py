@@ -5,9 +5,9 @@ import re
 import json
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
+from telethon.errors import AuthKeyDuplicatedError
 
 GIFS_DIR = "gifs"
 groups = ["Lets_Announcepad"]
@@ -93,7 +93,6 @@ async def general_chat_loop(clients, accounts):
         for idx, client in enumerate(clients):
             if not client:
                 continue
-            acc = accounts[idx]
             try:
                 me = await client.get_me()
             except Exception as e:
@@ -170,10 +169,17 @@ async def main():
     for idx, acc in enumerate(accounts, start=1):
         print(f"🚀 {idx}. hesap başlatılıyor... API_ID={acc['API_ID']}")
         try:
-            client = TelegramClient(StringSession(acc["STRING_SESSION"]), acc["API_ID"], acc["API_HASH"])
+            client = TelegramClient(
+                StringSession(acc["STRING_SESSION"]),
+                acc["API_ID"],
+                acc["API_HASH"]
+            )
             await client.start()
             clients.append(client)
             print(f"✅ {idx}. hesap başarıyla giriş yaptı")
+        except AuthKeyDuplicatedError:
+            print(f"❌ {idx}. hesap geçersiz (AuthKeyDuplicatedError), atlanıyor...")
+            clients.append(None)
         except Exception as e:
             print(f"❌ {idx}. hesap başlatılamadı: {e}")
             clients.append(None)
@@ -191,12 +197,20 @@ async def main():
         print("❌ Hiç client başlatılamadı, çıkılıyor...")
         return
 
-    asyncio.create_task(general_chat_loop(clients, accounts))
-    asyncio.create_task(conversation_loop(clients, accounts))
+    asyncio.create_task(general_chat_loop(aktif, accounts))
+    asyncio.create_task(conversation_loop(aktif, accounts))
 
-    await asyncio.gather(*(c.run_until_disconnected() for c in aktif))
+    try:
+        await asyncio.gather(*(c.run_until_disconnected() for c in aktif))
+    finally:
+        for client in aktif:
+            await client.disconnect()
+        print("🛑 Tüm clientler kapatıldı.")
 
 
 if __name__ == "__main__":
     print("🔥 Bot başlatılıyor...")
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("🛑 Manuel durdurma yapıldı.")
