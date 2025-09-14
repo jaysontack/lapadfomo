@@ -14,30 +14,51 @@ GIFS_DIR = "gifs"
 groups = ["Lets_Announcepad"]
 target_channel = "https://t.me/lapad_announcement"
 
-# ENV’den JSON olarak accounts okuma (Render için tek değişken kullanmak kolay olur)
-raw_accounts = os.getenv("ACCOUNTS_JSON", "[]")
-print("📥 ENV'den gelen ACCOUNTS_JSON:", raw_accounts[:120], "...")  # ilk 120 karakterini logla
-accounts = json.loads(raw_accounts)
-print(f"✅ {len(accounts)} hesap yüklendi")
+# 1) Öncelik: Tek bir JSON (ACCOUNTS_JSON)
+accounts = []
+raw_accounts = os.getenv("ACCOUNTS_JSON")
+if raw_accounts:
+    try:
+        accounts = json.loads(raw_accounts)
+        print(f"✅ ACCOUNTS_JSON bulundu: {len(accounts)} hesap yüklendi")
+    except Exception as e:
+        print(f"⚠️ ACCOUNTS_JSON parse hatası: {e}")
+
+# 2) Eğer JSON yoksa: API_ID_1, API_HASH_1, SESSION_1 formatından oku
+if not accounts:
+    idx = 1
+    while True:
+        api_id = os.getenv(f"API_ID_{idx}")
+        api_hash = os.getenv(f"API_HASH_{idx}")
+        session = os.getenv(f"SESSION_{idx}")
+        if not api_id or not api_hash or not session:
+            break
+        accounts.append({
+            "API_ID": int(api_id),
+            "API_HASH": api_hash,
+            "STRING_SESSION": session
+        })
+        idx += 1
+    print(f"✅ ENV formatından {len(accounts)} hesap yüklendi")
+
+if not accounts:
+    print("❌ Hiç hesap bulunamadı, çıkılıyor...")
+    exit(1)
 
 emojis = ["🔥", "🚀", "❤️", "😂", "😎", "👏", "🎉", "💯"]
 
 with open("message.txt", "r", encoding="utf-8") as f:
     messages = [line.strip() for line in f if line.strip()]
-print(f"✅ {len(messages)} hype mesaj yüklendi")
 
 with open("general.txt", "r", encoding="utf-8") as f:
     general_msgs = [line.strip() for line in f if line.strip()]
-print(f"✅ {len(general_msgs)} genel mesaj yüklendi")
 
 with open("stickers.txt", "r", encoding="utf-8") as f:
     stickers = [line.strip() for line in f if line.strip()]
-print(f"✅ {len(stickers)} sticker yüklendi")
 
 with open("conversations.txt", "r", encoding="utf-8") as f:
     raw_blocks = f.read().split("---")
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
-print(f"✅ {len(conversations)} conversation bloğu yüklendi")
 
 
 async def client_worker(idx, acc, client, clients):
