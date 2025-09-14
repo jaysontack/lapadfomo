@@ -2,41 +2,20 @@ import os
 import asyncio
 import random
 import re
+import json
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
-SESSIONS_DIR = "sessions"
 GIFS_DIR = "gifs"
 
 groups = ["Lets_Announcepad"]
 target_channel = "https://t.me/lapad_announcement"
 
-accounts = [
-    {"API_ID": 21318086, "API_HASH": "527a5add32472c5a8ef2ce5fe9b33e41"},
-    {"API_ID": 27534424, "API_HASH": "0177e8fb2ce88955502a06063ea843e7"},
-    {"API_ID": 23335629, "API_HASH": "cced31cf5ea9f486336dea367c2a7deb"},
-    {"API_ID": 11296099, "API_HASH": "aff2e88e5babf3f8808b4612c92dd617"},
-    {"API_ID": 25585876, "API_HASH": "1b85474d2cd05da895f5c5d53bce8654"},
-    {"API_ID": 20842385, "API_HASH": "c38c95c2b5b3886e19f1ff2cbbb3a8c5"},
-    {"API_ID": 23058473, "API_HASH": "a435ac06f42f7d563e04774cfe4a568e"},
-    {"API_ID": 24813233, "API_HASH": "222d6d129400decc4938c35980b1b7cf"},
-    {"API_ID": 27506052, "API_HASH": "7296b71b61e1d74c3f083019b0b84b42"},
-    {"API_ID": 28799463, "API_HASH": "96585faba9c39035d19993edd4682bda"},
-    {"API_ID": 24537749, "API_HASH": "f6a7168b8a96adb0a3009ac0de260973"},
-    {"API_ID": 29542269, "API_HASH": "76cd0de7e80f5bd96299d3fa2e89de0c"},
-    {"API_ID": 29438496, "API_HASH": "7e03d59872e8b6b21df43d4214cb8694"},
-    {"API_ID": 29039352, "API_HASH": "281e724ac1729dd817a4a8537d7078cd"},
-    {"API_ID": 25330921, "API_HASH": "c3e7cf340e6ddb7c3816b709d4bbe1b2"},
-    {"API_ID": 22639266, "API_HASH": "9606c5dfaf2077182d8cd7f7f75feead"},
-    {"API_ID": 11514098, "API_HASH": "2a8c4381ac25158bfece8f45f868ee1b"},
-    {"API_ID": 28274427, "API_HASH": "9dd2cc7935d53e9ede4d85a3c07d861f"},
-    {"API_ID": 25331942, "API_HASH": "6fe593cb4d69a7f106efd84f0455b9b0"},
-    {"API_ID": 20300289, "API_HASH": "fe3aad03905f985e9fdb68566d4d6649"},
-    {"API_ID": 22284524, "API_HASH": "a7f551e138441fe602427c9115a9c742"},
-]
+# ENV’den JSON olarak accounts okuma (Render için tek değişken kullanmak kolay olur)
+accounts = json.loads(os.getenv("ACCOUNTS_JSON", "[]"))
 
 emojis = ["🔥", "🚀", "❤️", "😂", "😎", "👏", "🎉", "💯"]
 
@@ -187,7 +166,6 @@ async def client_worker(idx, acc, client, clients):
                 content = content.strip()
                 try:
                     sender_idx = "ABCD".index(sender)
-                    # flood önleme: aynı kullanıcı üst üste gelirse farklı client seç
                     if sender == prev_sender:
                         sender_idx = (sender_idx + 1) % len(clients)
                     sender_client = clients[sender_idx]
@@ -206,7 +184,7 @@ async def client_worker(idx, acc, client, clients):
                         prev_sender = sender
                     except Exception as e:
                         print(f"⚠️ Conversation hatası: {e}")
-                await asyncio.sleep(random.randint(20, 40))  # süre artırıldı
+                await asyncio.sleep(random.randint(20, 40))
             await asyncio.sleep(random.randint(600, 1200))
 
     client.loop.create_task(general_chat_loop())
@@ -217,14 +195,7 @@ async def client_worker(idx, acc, client, clients):
 async def main():
     clients = []
     for idx, acc in enumerate(accounts, start=1):
-        session_file = os.path.join(SESSIONS_DIR, f"session{idx}.session")
-        if not os.path.exists(session_file):
-            print(f"⚠️ {session_file} bulunamadı, atlanıyor.")
-            clients.append(None)
-            continue
-        with open(session_file, "r") as f:
-            session_str = f.read().strip()
-        client = TelegramClient(StringSession(session_str), acc["API_ID"], acc["API_HASH"])
+        client = TelegramClient(StringSession(acc["STRING_SESSION"]), acc["API_ID"], acc["API_HASH"])
         await client.start()
         clients.append(client)
 
