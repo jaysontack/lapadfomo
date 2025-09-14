@@ -144,7 +144,7 @@ async def client_worker(idx, acc, client, clients):
                 except Exception as e:
                     print(f"⚠️ Genel sohbet hatası: {e}")
 
-            await asyncio.sleep(random.randint(300, 600))
+            await asyncio.sleep(random.randint(200, 300))
 
     async def conversation_loop():
         while True:
@@ -185,7 +185,7 @@ async def client_worker(idx, acc, client, clients):
                     except Exception as e:
                         print(f"⚠️ Conversation hatası: {e}")
                 await asyncio.sleep(random.randint(20, 40))
-            await asyncio.sleep(random.randint(600, 1200))
+            await asyncio.sleep(random.randint(100, 200))
 
     client.loop.create_task(general_chat_loop())
     client.loop.create_task(conversation_loop())
