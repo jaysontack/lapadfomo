@@ -11,6 +11,9 @@ from telethon.errors import AuthKeyDuplicatedError
 groups = ["Lets_Announcepad"]  # mesaj + sticker buraya
 target_channel = "https://t.me/lapad_announcement"  # sadece reaction buraya
 
+# --------------------------
+# ✅ ENV’den hesapları oku
+# --------------------------
 accounts = []
 raw_accounts = os.getenv("ACCOUNTS_JSON")
 if raw_accounts:
@@ -25,7 +28,7 @@ if not accounts:
     while True:
         api_id = os.getenv(f"API_ID_{idx}")
         api_hash = os.getenv(f"API_HASH_{idx}")
-        session = os.getenv(f"SESSION_{idx}")
+        session = os.getenv(f"SESSION_{idx}") or os.getenv(f"STRING_SESSION_{idx}")
         if not api_id or not api_hash or not session:
             break
         accounts.append({
@@ -40,6 +43,9 @@ if not accounts:
     print("❌ No accounts found, exiting...")
     exit(1)
 
+# --------------------------
+# ✅ Diğer ayarlar
+# --------------------------
 emojis = ["🔥", "🚀", "❤️", "😂", "😎", "👏", "🎉", "💯"]
 
 with open("message.txt", "r", encoding="utf-8") as f:
@@ -106,7 +112,7 @@ async def handle_new_post(event, clients):
             print(f"⚠️ Error with {me.username}: {e}")
 
 
-# ✅ General chat loop (her hesap aktif çalışır → mesaj + sticker + random delay)
+# ✅ General chat loop
 async def general_chat_loop(clients, accounts):
     print("🔄 General chat loop started")
     while True:
@@ -121,13 +127,11 @@ async def general_chat_loop(clients, accounts):
 
             for g in groups:
                 try:
-                    # Mesaj
                     msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
                     sent = await client.send_message(g, msg)
                     print(f"💬 {me.username} ({idx+1}) general msg: {msg}")
                     await asyncio.sleep(random.randint(3, 7))
 
-                    # Sticker
                     if stickers:
                         sticker = random.choice(stickers)
                         await client.send_file(g, sticker, reply_to=sent.id)
@@ -141,7 +145,7 @@ async def general_chat_loop(clients, accounts):
         await asyncio.sleep(random.randint(200, 300))
 
 
-# ✅ Conversation loop (senaryoları uygular)
+# ✅ Conversation loop
 async def conversation_loop(clients, accounts):
     print("🔄 Conversation loop started")
     while True:
@@ -180,6 +184,7 @@ async def conversation_loop(clients, accounts):
         await asyncio.sleep(random.randint(100, 200))
 
 
+# ✅ Ana fonksiyon
 async def main():
     clients = []
     for idx, acc in enumerate(accounts, start=1):
@@ -207,7 +212,6 @@ async def main():
         print("❌ No active clients, exiting...")
         return
 
-    # Tek handler → tüm hesaplar sırayla tepki verir
     @active[0].on(events.NewMessage(chats=target_channel))
     async def global_handler(event):
         await handle_new_post(event, active)
