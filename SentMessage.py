@@ -8,8 +8,8 @@ from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 from telethon.errors import AuthKeyDuplicatedError
 
-groups = ["Lets_Announcepad"]
-target_channel = "https://t.me/lapad_announcement"
+groups = ["Lets_Announcepad"]  # mesaj + sticker buraya
+target_channel = "https://t.me/lapad_announcement"  # sadece reaction buraya
 
 accounts = []
 raw_accounts = os.getenv("ACCOUNTS_JSON")
@@ -56,7 +56,7 @@ with open("conversations.txt", "r", encoding="utf-8") as f:
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
 
 
-# ✅ Çok kelimeli token ismini yakalar (ör: "Miami Store", "Shiba Inu Coin")
+# ✅ Çok kelimeli token ismini yakalar
 def extract_token_name(text: str) -> str:
     words = text.split()
     collected = []
@@ -68,47 +68,45 @@ def extract_token_name(text: str) -> str:
     return " ".join(collected) if collected else "Token"
 
 
-async def client_worker(idx, acc, client, clients):
-    try:
-        me = await client.get_me()
-        print(f"👤 {idx}. account active: {me.first_name} (@{me.username})")
-    except Exception as e:
-        print(f"❌ {idx}. account info error: {e}")
-        return
+# ✅ Kanal postu geldiğinde tüm hesaplar sırayla görev yapar
+async def handle_new_post(event, clients):
+    token_name = extract_token_name(event.raw_text)
+    print(f"📢 New post detected, token: {token_name}")
 
-    @client.on(events.NewMessage(chats=target_channel))
-    async def handler(event):
-        print(f"📩 {me.username} saw new channel post: {event.raw_text[:60]}...")
-
+    for idx, client in enumerate(clients, start=1):
+        if not client:
+            continue
         try:
-            # Her kullanıcı farklı emoji bırakır (round-robin)
+            me = await client.get_me()
+
+            # Reaction (kanala)
             emoji = emojis[(idx - 1) % len(emojis)]
             await client(SendReactionRequest(
                 peer=event.chat_id,
                 msg_id=event.id,
                 reaction=[ReactionEmoji(emoticon=emoji)]
             ))
-            print(f"💬 {me.username} added reaction {emoji}")
+            print(f"💬 {me.username} reacted {emoji}")
             await asyncio.sleep(2)
-        except Exception as e:
-            print(f"⚠️ Reaction error ({me.username}): {e}")
 
-        try:
-            token_name = extract_token_name(event.raw_text)
+            # Mesaj (gruba)
             msg_txt = random.choice(messages).replace("{name}", token_name)
-            await client.send_message(groups[0], msg_txt)
-            print(f"💬 {me.username} commented: {msg_txt}")
+            sent = await client.send_message(groups[0], msg_txt)
+            print(f"💬 {me.username} sent msg: {msg_txt}")
+            await asyncio.sleep(random.randint(3, 6))
 
+            # Sticker (gruba)
             if stickers:
                 sticker = random.choice(stickers)
-                await client.send_file(groups[0], sticker)
+                await client.send_file(groups[0], sticker, reply_to=sent.id)
                 print(f"🎨 {me.username} sent sticker")
+            await asyncio.sleep(random.randint(4, 8))
+
         except Exception as e:
-            print(f"⚠️ Comment error ({me.username}): {e}")
-
-    return client
+            print(f"⚠️ Error with {me.username}: {e}")
 
 
+# ✅ General chat loop (her hesap aktif çalışır → mesaj + sticker + random delay)
 async def general_chat_loop(clients, accounts):
     print("🔄 General chat loop started")
     while True:
@@ -121,18 +119,20 @@ async def general_chat_loop(clients, accounts):
                 print(f"⚠️ {idx+1}. get_me error: {e}")
                 continue
 
-            msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
             for g in groups:
                 try:
+                    # Mesaj
+                    msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
                     sent = await client.send_message(g, msg)
                     print(f"💬 {me.username} ({idx+1}) general msg: {msg}")
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(random.randint(3, 7))
 
+                    # Sticker
                     if stickers:
                         sticker = random.choice(stickers)
                         await client.send_file(g, sticker, reply_to=sent.id)
                         print(f"🎨 {me.username} ({idx+1}) sticker sent")
-                        await asyncio.sleep(2)
+                    await asyncio.sleep(random.randint(5, 10))
 
                 except Exception as e:
                     print(f"⚠️ General chat error ({me.username}): {e}")
@@ -141,6 +141,7 @@ async def general_chat_loop(clients, accounts):
         await asyncio.sleep(random.randint(200, 300))
 
 
+# ✅ Conversation loop (senaryoları uygular)
 async def conversation_loop(clients, accounts):
     print("🔄 Conversation loop started")
     while True:
@@ -202,15 +203,14 @@ async def main():
     active = [c for c in clients if c]
     print(f"✅ {len(active)} clients active, {len(clients)-len(active)} failed")
 
-    for idx, client in enumerate(clients, start=1):
-        if client:
-            print(f"▶️ Starting client_worker for {idx}")
-            asyncio.create_task(client_worker(idx, accounts[idx-1], client, clients))
-            await asyncio.sleep(2)
-
     if not active:
         print("❌ No active clients, exiting...")
         return
+
+    # Tek handler → tüm hesaplar sırayla tepki verir
+    @active[0].on(events.NewMessage(chats=target_channel))
+    async def global_handler(event):
+        await handle_new_post(event, active)
 
     asyncio.create_task(general_chat_loop(active, accounts))
     asyncio.create_task(conversation_loop(active, accounts))
