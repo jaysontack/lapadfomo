@@ -56,12 +56,16 @@ with open("conversations.txt", "r", encoding="utf-8") as f:
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
 
 
+# ✅ Çok kelimeli token ismini yakalar (ör: "Miami Store", "Shiba Inu Coin")
 def extract_token_name(text: str) -> str:
     words = text.split()
+    collected = []
     for w in words:
-        if w.isalpha():
-            return w
-    return "Token"
+        if w.lower() in ["is", "are"]:
+            break
+        if w.replace("-", "").replace("_", "").isalpha():
+            collected.append(w)
+    return " ".join(collected) if collected else "Token"
 
 
 async def client_worker(idx, acc, client, clients):
@@ -77,15 +81,15 @@ async def client_worker(idx, acc, client, clients):
         print(f"📩 {me.username} saw new channel post: {event.raw_text[:60]}...")
 
         try:
-            for round_num in range(1, 4):
-                emoji = random.choice(emojis)
-                await client(SendReactionRequest(
-                    peer=event.chat_id,
-                    msg_id=event.id,
-                    reaction=[ReactionEmoji(emoticon=emoji)]
-                ))
-                print(f"💬 {me.username} added reaction {emoji}")
-                await asyncio.sleep(2)
+            # Her kullanıcı farklı emoji bırakır (round-robin)
+            emoji = emojis[(idx - 1) % len(emojis)]
+            await client(SendReactionRequest(
+                peer=event.chat_id,
+                msg_id=event.id,
+                reaction=[ReactionEmoji(emoticon=emoji)]
+            ))
+            print(f"💬 {me.username} added reaction {emoji}")
+            await asyncio.sleep(2)
         except Exception as e:
             print(f"⚠️ Reaction error ({me.username}): {e}")
 
