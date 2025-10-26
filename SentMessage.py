@@ -2,14 +2,18 @@ import os
 import asyncio
 import random
 import json
+import re
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 from telethon.errors import AuthKeyDuplicatedError
 
-groups = ["Lets_Announcepad"]  # mesaj + sticker buraya
-target_channel = "https://t.me/lapad_announcement"  # sadece reaction buraya
+# --------------------------
+# 📍 Hedef grup ve kanal
+# --------------------------
+groups = ["BullishMarktCap"]  # mesaj + sticker buraya
+target_channel = "https://t.me/Bmc_coinsale_alert"  # sadece reaction buraya
 
 # --------------------------
 # ✅ ENV’den hesapları oku
@@ -62,19 +66,21 @@ with open("conversations.txt", "r", encoding="utf-8") as f:
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
 
 
-# ✅ Çok kelimeli token ismini yakalar
+# ✅ Yeni versiyon: sadece ana başlıktaki $SYMBOL'ü alır
 def extract_token_name(text: str) -> str:
-    words = text.split()
-    collected = []
-    for w in words:
-        if w.lower() in ["is", "are"]:
-            break
-        if w.replace("-", "").replace("_", "").isalpha():
-            collected.append(w)
-    return " ".join(collected) if collected else "Token"
+    """
+    Postun başlığındaki $SYMBOL bilgisini döndürür.
+    Örnek:
+    🪐 $LILPEPE listed on BullishMarketCap. -> LILPEPE
+    """
+    first_line = text.strip().splitlines()[0]
+    match = re.search(r"\$([A-Za-z0-9_]+)", first_line)
+    if match:
+        return match.group(1).upper().strip()
+    return "TOKEN"
 
 
-# ✅ Kanal postu geldiğinde tüm hesaplar sırayla görev yapar
+# ✅ Kanal postu geldiğinde görev yapar
 async def handle_new_post(event, clients):
     token_name = extract_token_name(event.raw_text)
     print(f"📢 New post detected, token: {token_name}")
@@ -93,20 +99,20 @@ async def handle_new_post(event, clients):
                 reaction=[ReactionEmoji(emoticon=emoji)]
             ))
             print(f"💬 {me.username} reacted {emoji}")
-            await asyncio.sleep(2)
+            await asyncio.sleep(random.randint(5, 10))  # daha yavaş
 
             # Mesaj (gruba)
             msg_txt = random.choice(messages).replace("{name}", token_name)
             sent = await client.send_message(groups[0], msg_txt)
             print(f"💬 {me.username} sent msg: {msg_txt}")
-            await asyncio.sleep(random.randint(3, 6))
+            await asyncio.sleep(random.randint(10, 20))
 
             # Sticker (gruba)
-            if stickers:
+            if stickers and random.random() < 0.9:  # %90 ihtimalle sticker at
                 sticker = random.choice(stickers)
                 await client.send_file(groups[0], sticker, reply_to=sent.id)
                 print(f"🎨 {me.username} sent sticker")
-            await asyncio.sleep(random.randint(4, 8))
+            await asyncio.sleep(random.randint(15, 30))
 
         except Exception as e:
             print(f"⚠️ Error with {me.username}: {e}")
@@ -130,19 +136,19 @@ async def general_chat_loop(clients, accounts):
                     msg = random.choice(general_msgs) if general_msgs else "🔥 Bullish vibes!"
                     sent = await client.send_message(g, msg)
                     print(f"💬 {me.username} ({idx+1}) general msg: {msg}")
-                    await asyncio.sleep(random.randint(3, 7))
+                    await asyncio.sleep(random.randint(10, 20))
 
-                    if stickers:
+                    if stickers and random.random() < 0.85:
                         sticker = random.choice(stickers)
                         await client.send_file(g, sticker, reply_to=sent.id)
                         print(f"🎨 {me.username} ({idx+1}) sticker sent")
-                    await asyncio.sleep(random.randint(5, 10))
+                    await asyncio.sleep(random.randint(20, 40))
 
                 except Exception as e:
                     print(f"⚠️ General chat error ({me.username}): {e}")
 
         print("⏳ Waiting before next general round...")
-        await asyncio.sleep(random.randint(200, 300))
+        await asyncio.sleep(random.randint(400, 600))  # 6–10 dakika
 
 
 # ✅ Conversation loop
@@ -180,8 +186,8 @@ async def conversation_loop(clients, accounts):
                     last_msg, prev_sender = sent, sender
                 except Exception as e:
                     print(f"⚠️ Conversation error ({me.username}): {e}")
-            await asyncio.sleep(random.randint(20, 40))
-        await asyncio.sleep(random.randint(100, 200))
+            await asyncio.sleep(random.randint(40, 80))  # mesaj arası
+        await asyncio.sleep(random.randint(300, 600))  # blok arası 5–10 dk
 
 
 # ✅ Ana fonksiyon
