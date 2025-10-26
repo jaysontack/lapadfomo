@@ -66,13 +66,8 @@ with open("conversations.txt", "r", encoding="utf-8") as f:
 conversations = [block.strip().splitlines() for block in raw_blocks if block.strip()]
 
 
-# ✅ Yeni versiyon: sadece ana başlıktaki $SYMBOL'ü alır
+# ✅ Sadece ana başlıktaki $SYMBOL'ü alır
 def extract_token_name(text: str) -> str:
-    """
-    Postun başlığındaki $SYMBOL bilgisini döndürür.
-    Örnek:
-    🪐 $LILPEPE listed on BullishMarketCap. -> LILPEPE
-    """
     first_line = text.strip().splitlines()[0]
     match = re.search(r"\$([A-Za-z0-9_]+)", first_line)
     if match:
@@ -151,22 +146,33 @@ async def general_chat_loop(clients, accounts):
         await asyncio.sleep(random.randint(400, 600))  # 6–10 dakika
 
 
-# ✅ Conversation loop
+# ✅ Conversation loop (reply zinciri destekli)
 async def conversation_loop(clients, accounts):
     print("🔄 Conversation loop started")
     while True:
         block = random.choice(conversations)
         print(f"🗨️ New conversation started...")
-        last_msg, prev_sender = None, None
+        sent_msgs = {}  # ✅ Her kullanıcının son mesaj ID'sini saklayacak
+        prev_sender = None
+
         for line in block:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
             if ":" not in line:
                 continue
-            sender, content = line.split(":", 1)
-            sender = sender.strip()
-            content = content.strip()
+
+            # Örnek: "B -> A: Yeah, big move loading."
+            # veya "A: Chart looks ready..."
+            parts = line.split(":", 1)
+            left = parts[0].strip()
+            content = parts[1].strip()
+
+            if "->" in left:
+                sender, reply_target = [p.strip() for p in left.split("->", 1)]
+            else:
+                sender, reply_target = left, None
+
             try:
                 sender_idx = "ABCD".index(sender)
                 if sender == prev_sender:
@@ -179,14 +185,28 @@ async def conversation_loop(clients, accounts):
             except (ValueError, IndexError) as e:
                 print(f"⚠️ Sender index error: {e}")
                 continue
+
             for g in groups:
                 try:
-                    sent = await sender_client.send_message(g, content)
+                    reply_to_id = None
+                    if reply_target and reply_target in sent_msgs:
+                        reply_to_id = sent_msgs[reply_target]  # ✅ doğru reply ilişkisi
+
+                    sent = await sender_client.send_message(
+                        g,
+                        content,
+                        reply_to=reply_to_id  # 🔥 reply zinciri burada oluşur
+                    )
+                    sent_msgs[sender] = sent.id
+                    prev_sender = sender
                     print(f"💬 {sender} ({me.username}) said in {g}: {content}")
-                    last_msg, prev_sender = sent, sender
+
                 except Exception as e:
                     print(f"⚠️ Conversation error ({me.username}): {e}")
+
             await asyncio.sleep(random.randint(40, 80))  # mesaj arası
+
+        print("🕐 Conversation block finished. Waiting for next one...")
         await asyncio.sleep(random.randint(300, 600))  # blok arası 5–10 dk
 
 
